@@ -4,13 +4,16 @@ import requests
 import smtplib
 from email.mime.text import MIMEText
 
-# Website URL to monitor
-URL = "https://www.iiitb.ac.in/courses/master-of-science-by-researchdoctor-of-philosophy"  
-
 # Email credentials stored in GitHub Secrets
 EMAIL_SENDER = os.getenv("EMAIL_SENDER")
 EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")
 EMAIL_RECEIVER = os.getenv("EMAIL_RECEIVER")
+
+# File containing website list
+WEBSITE_FILE = "websites.txt"
+
+# Dictionary to store previous hashes
+previous_hashes = {}
 
 # Function to send an email
 def send_email(subject, body):
@@ -25,7 +28,7 @@ def send_email(subject, body):
         server.login(EMAIL_SENDER, EMAIL_PASSWORD)
         server.sendmail(EMAIL_SENDER, EMAIL_RECEIVER, msg.as_string())
         server.quit()
-        print("Email sent successfully.")
+        print(f"Email sent: {subject}")
     except Exception as e:
         print(f"Failed to send email: {e}")
 
@@ -34,16 +37,23 @@ def get_page_hash(url):
     try:
         response = requests.get(url, timeout=10)
         response.raise_for_status()
-        page_content = response.text
-        return hashlib.sha256(page_content.encode()).hexdigest()
+        return hashlib.sha256(response.text.encode()).hexdigest()
     except requests.RequestException as e:
-        print(f"Error fetching the page: {e}")
+        print(f"Error fetching {url}: {e}")
         return None
 
-# Check for changes
-previous_hash = None
-current_hash = get_page_hash(URL)
+# Read websites from file
+if os.path.exists(WEBSITE_FILE):
+    with open(WEBSITE_FILE, "r") as file:
+        for line in file:
+            parts = line.strip().split(maxsplit=1)
+            if len(parts) == 2:
+                name, url = parts
+                current_hash = get_page_hash(url)
 
-if current_hash and previous_hash and current_hash != previous_hash:
-    send_email("Website Change Detected", f"The content of {URL} has changed.")
-previous_hash = current_hash
+                if url in previous_hashes and current_hash and previous_hashes[url] != current_hash:
+                    send_email(f"Website Change Detected: {name}", f"The content of {name} ({url}) has changed.")
+
+                previous_hashes[url] = current_hash
+else:
+    print(f"Error: {WEBSITE_FILE} not found!")
