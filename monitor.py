@@ -1,4 +1,5 @@
 import os
+import json
 import hashlib
 import requests
 import smtplib
@@ -9,11 +10,16 @@ EMAIL_SENDER = os.getenv("EMAIL_SENDER")
 EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")
 EMAIL_RECEIVER = os.getenv("EMAIL_RECEIVER")
 
-# File containing website list
+# File paths
 WEBSITE_FILE = "websites.txt"
+HASHES_FILE = "hashes.json"
 
-# Dictionary to store previous hashes
-previous_hashes = {}
+# Load previous hashes (if file exists)
+if os.path.exists(HASHES_FILE):
+    with open(HASHES_FILE, "r") as file:
+        previous_hashes = json.load(file)
+else:
+    previous_hashes = {}
 
 # Function to send an email
 def send_email(subject, body):
@@ -54,6 +60,12 @@ if os.path.exists(WEBSITE_FILE):
                 if url in previous_hashes and current_hash and previous_hashes[url] != current_hash:
                     send_email(f"Website Change Detected: {name}", f"The content of {name} ({url}) has changed.")
 
-                previous_hashes[url] = current_hash
+                # Update hash
+                if current_hash:
+                    previous_hashes[url] = current_hash
+
+    # Save updated hashes to file
+    with open(HASHES_FILE, "w") as file:
+        json.dump(previous_hashes, file, indent=4)
 else:
     print(f"Error: {WEBSITE_FILE} not found!")
