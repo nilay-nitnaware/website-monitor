@@ -27,3 +27,11 @@ jobs:
           EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
           EMAIL_RECEIVER: ${{ secrets.EMAIL_RECEIVER }}
         run: python monitor.py
+
+      - name: Commit and Push Updated Hashes
+        run: |
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+          git add hashes.json
+          git commit -m "Update hashes.json [skip ci]" || echo "No changes to commit"
+          git push
