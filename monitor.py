@@ -9,9 +9,9 @@ from email.mime.multipart import MIMEMultipart
 # Email Configuration
 SMTP_SERVER = "smtp.gmail.com"
 SMTP_PORT = 587
-SENDER_EMAIL = "your-email@gmail.com"
-SENDER_PASSWORD = "your-app-password"
-RECIPIENT_EMAIL = "recipient-email@gmail.com"
+#SENDER_EMAIL = "your-email@gmail.com"
+#SENDER_PASSWORD = "your-app-password"
+#RECIPIENT_EMAIL = "recipient-email@gmail.com"
 
 # Load websites from file
 def load_websites(file_path="websites.txt"):
