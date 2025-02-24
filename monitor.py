@@ -1,71 +1,117 @@
-import os
-import json
-import hashlib
 import requests
+import hashlib
+import json
 import smtplib
+import difflib
 from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 
-# Email credentials stored in GitHub Secrets
-EMAIL_SENDER = os.getenv("EMAIL_SENDER")
-EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")
-EMAIL_RECEIVER = os.getenv("EMAIL_RECEIVER")
+# Email Configuration
+SMTP_SERVER = "smtp.gmail.com"
+SMTP_PORT = 587
+SENDER_EMAIL = "your-email@gmail.com"
+SENDER_PASSWORD = "your-app-password"
+RECIPIENT_EMAIL = "recipient-email@gmail.com"
 
-# File paths
-WEBSITE_FILE = "websites.txt"
-HASHES_FILE = "hashes.json"
+# Load websites from file
+def load_websites(file_path="websites.txt"):
+    websites = {}
+    with open(file_path, "r") as file:
+        for line in file:
+            parts = line.strip().split(" ", 1)  # Split into name and URL
+            if len(parts) == 2:
+                name, url = parts
+                websites[name] = url
+    return websites
 
-# Load previous hashes (if file exists)
-if os.path.exists(HASHES_FILE):
-    with open(HASHES_FILE, "r") as file:
-        previous_hashes = json.load(file)
-else:
-    previous_hashes = {}
-
-# Function to send an email
-def send_email(subject, body):
-    msg = MIMEText(body)
-    msg["Subject"] = subject
-    msg["From"] = EMAIL_SENDER
-    msg["To"] = EMAIL_RECEIVER
-
+# Load stored hashes
+def load_hashes(file_path="hashes.json"):
     try:
-        server = smtplib.SMTP("smtp.gmail.com", 587)
-        server.starttls()
-        server.login(EMAIL_SENDER, EMAIL_PASSWORD)
-        server.sendmail(EMAIL_SENDER, EMAIL_RECEIVER, msg.as_string())
-        server.quit()
-        print(f"Email sent: {subject}")
-    except Exception as e:
-        print(f"Failed to send email: {e}")
+        with open(file_path, "r") as file:
+            return json.load(file)
+    except FileNotFoundError:
+        return {}
 
-# Function to get the hash of the website content
-def get_page_hash(url):
+# Save updated hashes
+def save_hashes(hashes, file_path="hashes.json"):
+    with open(file_path, "w") as file:
+        json.dump(hashes, file, indent=4)
+
+# Fetch website content
+def fetch_content(url):
     try:
         response = requests.get(url, timeout=10)
         response.raise_for_status()
-        return hashlib.sha256(response.text.encode()).hexdigest()
-    except requests.RequestException as e:
-        print(f"Error fetching {url}: {e}")
+        return response.text
+    except requests.RequestException:
         return None
 
-# Read websites from file
-if os.path.exists(WEBSITE_FILE):
-    with open(WEBSITE_FILE, "r") as file:
-        for line in file:
-            parts = line.strip().split(maxsplit=1)
-            if len(parts) == 2:
-                name, url = parts
-                current_hash = get_page_hash(url)
+# Compute hash of content
+def compute_hash(content):
+    return hashlib.sha256(content.encode()).hexdigest()
 
-                if url in previous_hashes and current_hash and previous_hashes[url] != current_hash:
-                    send_email(f"Website Change Detected: {name}", f"The content of {name} ({url}) has changed.")
+# Find differences between old and new content
+def find_changes(old_content, new_content):
+    diff = difflib.unified_diff(
+        old_content.splitlines(), new_content.splitlines(), lineterm=""
+    )
+    return "\n".join(diff)
 
-                # Update hash
-                if current_hash:
-                    previous_hashes[url] = current_hash
+# Send email notification
+def send_email(name, url, changes):
+    subject = f"Website Change Alert: {name}"
+    
+    body = f"""
+    The website '{name}' ({url}) has changed.
 
-    # Save updated hashes to file
-    with open(HASHES_FILE, "w") as file:
-        json.dump(previous_hashes, file, indent=4)
-else:
-    print(f"Error: {WEBSITE_FILE} not found!")
+    Here are the changes:
+    ----------------------------------------
+    {changes}
+    ----------------------------------------
+
+    Check the website to see full updates.
+    """
+
+    msg = MIMEMultipart()
+    msg["From"] = SENDER_EMAIL
+    msg["To"] = RECIPIENT_EMAIL
+    msg["Subject"] = subject
+    msg.attach(MIMEText(body, "plain"))
+
+    try:
+        server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT)
+        server.starttls()
+        server.login(SENDER_EMAIL, SENDER_PASSWORD)
+        server.sendmail(SENDER_EMAIL, RECIPIENT_EMAIL, msg.as_string())
+        server.quit()
+        print(f"Email sent: {name}")
+    except Exception as e:
+        print(f"Error sending email: {e}")
+
+# Main function
+def main():
+    websites = load_websites()
+    hashes = load_hashes()
+
+    for name, url in websites.items():
+        new_content = fetch_content(url)
+        if new_content is None:
+            print(f"Failed to fetch {name} ({url})")
+            continue
+
+        new_hash = compute_hash(new_content)
+        old_hash = hashes.get(name)
+
+        if old_hash and old_hash != new_hash:
+            print(f"Change detected on {name} ({url})")
+            old_content = fetch_content(url)  # Re-fetch to get old content
+            changes = find_changes(old_content, new_content)
+            send_email(name, url, changes)
+
+        # Update the hash
+        hashes[name] = new_hash
+
+    save_hashes(hashes)
+
+if __name__ == "__main__":
+    main()
