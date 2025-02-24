@@ -5,7 +5,7 @@ import smtplib
 from email.mime.text import MIMEText
 
 # Website URL to monitor
-URL = "https://example.com"  # Replace with the actual website URL
+URL = "https://www.iiitb.ac.in/courses/master-of-science-by-researchdoctor-of-philosophy"  
 
 # Email credentials stored in GitHub Secrets
 EMAIL_SENDER = os.getenv("EMAIL_SENDER")
